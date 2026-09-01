@@ -1,0 +1,23 @@
+# Ceph sources: 2.7 GB upstream tarball plus in-tree boost build output.
+# Reproduced by scripts/build.sh; our changes live in patches/.
+src/
+
+# Build environment and runtime artefacts
+.venv-build/
+run/
+logs/build-*.log
+logs/fuse-debug.log
+logs/mount-fg-*.log
+
+# Never: the cephx keyring belongs in ~/.ceph with 0600
+*.keyring
+
+.DS_Store
+
+# Site-specific: your cluster's details stay out of the repository
+site.conf
+etc/ceph.conf
+
+# Internal: run protocol, measurements and notes for our own cluster
+internal/
+dist/

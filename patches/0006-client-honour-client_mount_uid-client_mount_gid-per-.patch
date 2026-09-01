@@ -1,0 +1,257 @@
+From 20f26493926a3cf943056f15f320861f4e089bee Mon Sep 17 00:00:00 2001
+From: max <max@local>
+Date: Mon, 31 Aug 2026 16:04:10 +0200
+Subject: [PATCH 6/7] client: honour client_mount_uid/client_mount_gid per
+ request
+
+CephFS checks uid/gid like a local filesystem does, so a client whose local
+uids are unrelated to the cluster's -- a Mac against an LDAP-managed cluster --
+cannot write anywhere it does not own. The Samba gateway sidesteps this by
+acting under a cluster identity server-side.
+
+client_mount_uid/client_mount_gid already exist and are documented as 'uid to
+mount as', but Client.cc only reads them once at init while fuse_ll.cc rebuilt
+UserPerm from the FUSE context on every request, so they had no effect. Route
+all 16 call sites through one helper that consults them.
+
+Group resolution now follows the effective identity, and an unknown local uid
+yields no supplementary groups instead of an error.
+---
+ src/client/fuse_ll.cc | 67 +++++++++++++++++++++++++++----------------
+ 1 file changed, 42 insertions(+), 25 deletions(-)
+
+diff --git a/src/client/fuse_ll.cc b/src/client/fuse_ll.cc
+index 5e990d25d..ed9a9a845 100644
+--- a/src/client/fuse_ll.cc
++++ b/src/client/fuse_ll.cc
+@@ -318,7 +318,7 @@ static int local_getgroups(uid_t uid, gid_t gid, gid_t **sgids)
+   struct passwd pwd, *result = nullptr;
+   char pwbuf[4096];
+   if (getpwuid_r(uid, &pwd, pwbuf, sizeof(pwbuf), &result) != 0 || !result)
+-    return -get_sys_errno(EINVAL);
++    return 0;   // uid unknown locally (e.g. pinned via client_mount_uid)
+ 
+   // getgrouplist() reports the needed size on overflow, but Apple's version is
+   // not reliable about it -- grow a bounded number of times instead of looping
+@@ -353,6 +353,25 @@ static int local_getgroups(uid_t uid, gid_t gid, gid_t **sgids)
+ }
+ #endif
+ 
++/*
++ * The identity to act under. Normally the caller's, as handed over by FUSE.
++ * When client_mount_uid / client_mount_gid are set, act as that identity
++ * instead: CephFS checks uid/gid like a local filesystem, so a machine whose
++ * local uids are unrelated to the cluster's (a Mac against an LDAP-managed
++ * cluster) otherwise cannot write at all. This is what the Samba gateway does
++ * server-side; the options already exist and are documented as "uid to mount
++ * as", they were simply never consulted per request.
++ */
++static UserPerm fuse_ll_perms(CephFuse::Handle *cfuse, const struct fuse_ctx *ctx)
++{
++  const auto& conf = cfuse->client->cct->_conf;
++  int64_t mount_uid = conf.get_val<int64_t>("client_mount_uid");
++  int64_t mount_gid = conf.get_val<int64_t>("client_mount_gid");
++  uid_t uid = (mount_uid >= 0) ? static_cast<uid_t>(mount_uid) : ctx->uid;
++  gid_t gid = (mount_gid >= 0) ? static_cast<gid_t>(mount_gid) : ctx->gid;
++  return UserPerm(uid, gid);
++}
++
+ static void get_fuse_groups(UserPerm& perms, fuse_req_t req)
+ {
+   CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
+@@ -361,10 +380,8 @@ static void get_fuse_groups(UserPerm& perms, fuse_req_t req)
+     int count = getgroups(req, &gids);
+ 
+ #if defined(__APPLE__)
+-    if (count <= 0) {
+-      const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-      count = local_getgroups(ctx->uid, ctx->gid, &gids);
+-    }
++    if (count <= 0)
++      count = local_getgroups(perms.uid(), perms.gid(), &gids);
+ #endif
+ 
+     if (count > 0) {
+@@ -391,7 +408,7 @@ static void fuse_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
+   struct fuse_entry_param fe;
+   Inode *i2, *i1 = cfuse->iget(parent); // see below
+   int r;
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   get_fuse_groups(perms, req);
+ 
+   if (!i1)
+@@ -440,7 +457,7 @@ static void fuse_ll_getattr(fuse_req_t req, fuse_ino_t ino,
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+   struct stat stbuf;
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -467,7 +484,7 @@ static void fuse_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+ {
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -509,7 +526,7 @@ static void fuse_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
+ {
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -529,7 +546,7 @@ static void fuse_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+   char buf[size];
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -559,7 +576,7 @@ static void fuse_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+   char buf[size];
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -584,7 +601,7 @@ static void fuse_ll_removexattr(fuse_req_t req, fuse_ino_t ino,
+ {
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -604,7 +621,7 @@ static void fuse_ll_opendir(fuse_req_t req, fuse_ino_t ino,
+ {
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   void *dirp;
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+@@ -631,7 +648,7 @@ static void fuse_ll_readlink(fuse_req_t req, fuse_ino_t ino)
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+   char buf[PATH_MAX + 1];  // leave room for a null terminator
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -656,7 +673,7 @@ static void fuse_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+   struct fuse_entry_param fe;
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *i2, *i1 = cfuse->iget(parent);
+   if (!i1) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -691,7 +708,7 @@ static void fuse_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
+   struct fuse_entry_param fe;
+ 
+   memset(&fe, 0, sizeof(fe));
+-  UserPerm perm(ctx->uid, ctx->gid);
++  UserPerm perm = fuse_ll_perms(cfuse, ctx);
+   get_fuse_groups(perm, req);
+ #ifdef HAVE_SYS_SYNCFS
+   auto fuse_multithreaded = cfuse->client->cct->_conf.get_val<bool>(
+@@ -745,7 +762,7 @@ static void fuse_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
+ {
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-  UserPerm perm(ctx->uid, ctx->gid);
++  UserPerm perm = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(parent);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -764,7 +781,7 @@ static void fuse_ll_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
+ {
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(parent);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -785,7 +802,7 @@ static void fuse_ll_symlink(fuse_req_t req, const char *existing,
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+   struct fuse_entry_param fe;
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *i2, *i1 = cfuse->iget(parent);
+   if (!i1) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -828,7 +845,7 @@ static void fuse_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
+ 
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-  UserPerm perm(ctx->uid, ctx->gid);
++  UserPerm perm = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(parent);
+   Inode *nin = cfuse->iget(newparent);
+   if (!in || !nin) {
+@@ -859,7 +876,7 @@ static void fuse_ll_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
+   }
+ 
+   memset(&fe, 0, sizeof(fe));
+-  UserPerm perm(ctx->uid, ctx->gid);
++  UserPerm perm = fuse_ll_perms(cfuse, ctx);
+   get_fuse_groups(perm, req);
+ 
+   /*
+@@ -897,7 +914,7 @@ static void fuse_ll_open(fuse_req_t req, fuse_ino_t ino,
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+   Fh *fh = NULL;
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -1134,7 +1151,7 @@ static void fuse_ll_access(fuse_req_t req, fuse_ino_t ino, int mask)
+ {
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -1155,7 +1172,7 @@ static void fuse_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+   struct fuse_entry_param fe;
+   Fh *fh = NULL;
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *i1 = cfuse->iget(parent), *i2;
+   if (!i1) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+@@ -1195,7 +1212,7 @@ static void fuse_ll_statfs(fuse_req_t req, fuse_ino_t ino)
+   struct statvfs stbuf;
+   CephFuse::Handle *cfuse = fuse_ll_req_prepare(req);
+   const struct fuse_ctx *ctx = fuse_req_ctx(req);
+-  UserPerm perms(ctx->uid, ctx->gid);
++  UserPerm perms = fuse_ll_perms(cfuse, ctx);
+   Inode *in = cfuse->iget(ino);
+   if (!in) {
+     fuse_reply_err(req, get_sys_errno(EINVAL));
+-- 
+2.50.1 (Apple Git-155)
+

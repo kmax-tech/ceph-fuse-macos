@@ -1,0 +1,28 @@
+From ba3857bd9a0f4efb8fddbe172c3abd709f36f402 Mon Sep 17 00:00:00 2001
+From: max <max@local>
+Date: Mon, 31 Aug 2026 14:24:50 +0200
+Subject: [PATCH 1/7] cmake: accept AppleClang as the clang toolset for the
+ bundled boost build
+
+---
+ cmake/modules/BuildBoost.cmake | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/cmake/modules/BuildBoost.cmake b/cmake/modules/BuildBoost.cmake
+index 342f27387..732756b93 100644
+--- a/cmake/modules/BuildBoost.cmake
++++ b/cmake/modules/BuildBoost.cmake
+@@ -85,7 +85,9 @@ function(do_build_boost root_dir version)
+ 
+   if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+     set(toolset gcc)
+-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL Clang)
++  elseif(CMAKE_CXX_COMPILER_ID STREQUAL Clang OR
++         CMAKE_CXX_COMPILER_ID STREQUAL AppleClang)
++    # Apple's clang reports its own compiler id, but b2 drives it as clang.
+     set(toolset clang)
+   else()
+     message(SEND_ERROR "unknown compiler: ${CMAKE_CXX_COMPILER_ID}")
+-- 
+2.50.1 (Apple Git-155)
+

@@ -1,0 +1,111 @@
+From 7d79e697144f0b7164fb3d456e5adffd8d8f80b7 Mon Sep 17 00:00:00 2001
+From: max <max@local>
+Date: Mon, 31 Aug 2026 15:27:00 +0200
+Subject: [PATCH 5/7] client: resolve supplementary groups locally on macOS
+
+macFUSE exports fuse_req_getgroups() but always reports zero supplementary
+groups, since macOS has no /proc for libfuse to read the caller's credentials
+from. Fall back to the local user database (getpwuid_r + getgrouplist), which
+carries the same set the kernel would have supplied on Linux.
+
+Without this, a user only ever reaches files granted through their primary
+group. Directories shared through a secondary group -- the normal case on a
+CephFS tree -- stay inaccessible even though the user is a member.
+
+Guarded by the existing fuse_set_user_groups option and by __APPLE__.
+---
+ src/client/fuse_ll.cc | 64 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 64 insertions(+)
+
+diff --git a/src/client/fuse_ll.cc b/src/client/fuse_ll.cc
+index e16d8e9a8..5e990d25d 100644
+--- a/src/client/fuse_ll.cc
++++ b/src/client/fuse_ll.cc
+@@ -31,6 +31,12 @@
+ #include <linux/magic.h>
+ #endif
+ 
++#if defined(__APPLE__)
++#include <grp.h>
++#include <pwd.h>
++#include <vector>
++#endif
++
+ // ceph
+ #include "common/errno.h"
+ #include "common/safe_io.h"
+@@ -296,6 +302,57 @@ static int getgroups(fuse_req_t req, gid_t **sgids)
+   return -get_sys_errno(ENOSYS);
+ }
+ 
++#if defined(__APPLE__)
++/*
++ * macFUSE exports fuse_req_getgroups(), but it always reports zero
++ * supplementary groups -- macOS has no /proc for libfuse to read the caller's
++ * credentials from. Resolve them from the local user database instead, which
++ * is the same set the kernel would have carried on Linux. Without this, a user
++ * only ever reaches files granted through their primary group, and directories
++ * such as CephFS trees shared via a secondary group stay inaccessible.
++ */
++static int local_getgroups(uid_t uid, gid_t gid, gid_t **sgids)
++{
++  ceph_assert(sgids);
++
++  struct passwd pwd, *result = nullptr;
++  char pwbuf[4096];
++  if (getpwuid_r(uid, &pwd, pwbuf, sizeof(pwbuf), &result) != 0 || !result)
++    return -get_sys_errno(EINVAL);
++
++  // getgrouplist() reports the needed size on overflow, but Apple's version is
++  // not reliable about it -- grow a bounded number of times instead of looping
++  // on its answer.
++  int capacity = 64;
++  std::vector<int> groups;
++  int count = -1;
++  for (int attempt = 0; attempt < 4; ++attempt) {
++    groups.assign(capacity, 0);
++    int n = capacity;
++    if (getgrouplist(result->pw_name, (int)gid, groups.data(), &n) != -1) {
++      count = n;
++      break;
++    }
++    capacity = (n > capacity) ? n : capacity * 2;
++    if (capacity > 4096)
++      return -get_sys_errno(EINVAL);
++  }
++  if (count < 0)
++    return -get_sys_errno(EINVAL);
++  if (count == 0)
++    return 0;
++
++  gid_t *gids = new (std::nothrow) gid_t[count];
++  if (!gids)
++    return -get_sys_errno(ENOMEM);
++  for (int i = 0; i < count; ++i)
++    gids[i] = (gid_t)groups[i];
++
++  *sgids = gids;
++  return count;
++}
++#endif
++
+ static void get_fuse_groups(UserPerm& perms, fuse_req_t req)
+ {
+   CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
+@@ -303,6 +360,13 @@ static void get_fuse_groups(UserPerm& perms, fuse_req_t req)
+     gid_t *gids = NULL;
+     int count = getgroups(req, &gids);
+ 
++#if defined(__APPLE__)
++    if (count <= 0) {
++      const struct fuse_ctx *ctx = fuse_req_ctx(req);
++      count = local_getgroups(ctx->uid, ctx->gid, &gids);
++    }
++#endif
++
+     if (count > 0) {
+       perms.init_gids(gids, count);
+     } else if (count < 0) {
+-- 
+2.50.1 (Apple Git-155)
+

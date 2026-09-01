@@ -1,0 +1,238 @@
+From 81b34ce3d7552343c0b72d1ba8977071ed16c107 Mon Sep 17 00:00:00 2001
+From: max <max@local>
+Date: Mon, 31 Aug 2026 14:26:24 +0200
+Subject: [PATCH 2/7] cmake: build boost::context for mach-o on Apple Silicon,
+ not elf
+
+---
+ cmake/modules/BuildBoost.cmake                |  11 +-
+ src/boost/b2                                  | Bin 0 -> 307696 bytes
+ .../threading-multi/visibility-hidden/64.o    | Bin 0 -> 1880 bytes
+ .../threading-multi/visibility-hidden/arm.o   | Bin 0 -> 336 bytes
+ .../cxx11_auto_declarations.o                 | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_decltype.o        | Bin 0 -> 512 bytes
+ .../cxx11_defaulted_functions.o               | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_defaulted_moves.o | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_hdr_functional.o  | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_hdr_type_traits.o | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_noexcept.o        | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_nullptr.o         | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_override.o        | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_range_based_for.o | Bin 0 -> 512 bytes
+ .../cxx11_rvalue_references.o                 | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_scoped_enums.o    | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_smart_ptr.o       | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_static_assert.o   | Bin 0 -> 512 bytes
+ src/boost/bin.v2/project-cache.jam            |  31 ++
+ src/boost/bin.v2/standalone/ac/bzlib_h.cpp    |   1 +
+ .../threading-multi/visibility-hidden/bz2     | Bin 0 -> 16816 bytes
+ .../visibility-hidden/bzlib_h.o               | Bin 0 -> 336 bytes
+ .../threading-multi/visibility-hidden/lzma    | Bin 0 -> 16824 bytes
+ .../visibility-hidden/main-bz2.o              | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-libzstd.o          | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-libzstd_static.o   | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-lzma.o             | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-z.o                | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-zstd.o             | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-zstd_static.o      | Bin 0 -> 512 bytes
+ .../threading-multi/visibility-hidden/z       | Bin 0 -> 16816 bytes
+ .../visibility-hidden/zlib_h.o                | Bin 0 -> 336 bytes
+ .../visibility-hidden/main-libzstd.o          | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-libzstd_static.o   | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-zstd.o             | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-zstd_static.o      | Bin 0 -> 512 bytes
+ src/boost/bin.v2/standalone/ac/lzma_h.cpp     |   1 +
+ src/boost/bin.v2/standalone/ac/main-bz2.cpp   |   1 +
+ .../bin.v2/standalone/ac/main-libzstd.cpp     |   1 +
+ .../standalone/ac/main-libzstd_static.cpp     |   1 +
+ src/boost/bin.v2/standalone/ac/main-lzma.cpp  |   1 +
+ src/boost/bin.v2/standalone/ac/main-z.cpp     |   1 +
+ src/boost/bin.v2/standalone/ac/main-zstd.cpp  |   1 +
+ .../bin.v2/standalone/ac/main-zstd_static.cpp |   1 +
+ src/boost/bin.v2/standalone/ac/zlib_h.cpp     |   1 +
+ src/boost/bin.v2/standalone/ac/zstd_h.cpp     |   1 +
+ .../boost_install/BoostConfigVersion.cmake    |  12 +
+ src/boost/project-config.jam                  |  34 ++
+ .../lib/cmake/Boost-1.82.0/BoostConfig.cmake  | 296 ++++++++++++++++++
+ .../Boost-1.82.0/BoostConfigVersion.cmake     |  12 +
+ .../lib/cmake/BoostDetectToolset-1.82.0.cmake | 166 ++++++++++
+ .../boost_atomic-config-version.cmake         |  12 +
+ .../boost_atomic-config.cmake                 | 115 +++++++
+ .../libboost_atomic-variant-static.cmake      |  86 +++++
+ .../boost_chrono-config-version.cmake         |  12 +
+ .../boost_chrono-config.cmake                 | 115 +++++++
+ .../libboost_chrono-variant-static.cmake      |  86 +++++
+ .../boost_container-config-version.cmake      |  12 +
+ .../boost_container-config.cmake              | 115 +++++++
+ .../libboost_container-variant-static.cmake   |  86 +++++
+ .../boost_context-config-version.cmake        |  12 +
+ .../boost_context-config.cmake                | 115 +++++++
+ .../boost_coroutine-config-version.cmake      |  12 +
+ .../boost_coroutine-config.cmake              | 115 +++++++
+ .../libboost_coroutine-variant-static.cmake   |  86 +++++
+ .../boost_date_time-config-version.cmake      |  12 +
+ .../boost_date_time-config.cmake              | 115 +++++++
+ .../libboost_date_time-variant-static.cmake   |  86 +++++
+ .../boost_headers-config-version.cmake        |  12 +
+ .../boost_headers-config.cmake                |  35 +++
+ .../boost_iostreams-config-version.cmake      |  12 +
+ .../boost_iostreams-config.cmake              | 115 +++++++
+ .../libboost_iostreams-variant-static.cmake   |  94 ++++++
+ .../boost_locale-config-version.cmake         |  12 +
+ .../boost_locale-config.cmake                 | 115 +++++++
+ .../libboost_locale-variant-static.cmake      |  94 ++++++
+ ...boost_program_options-config-version.cmake |  12 +
+ .../boost_program_options-config.cmake        | 115 +++++++
+ ...boost_program_options-variant-static.cmake |  86 +++++
+ .../boost_random-config-version.cmake         |  12 +
+ .../boost_random-config.cmake                 | 115 +++++++
+ .../libboost_random-variant-static.cmake      |  86 +++++
+ .../boost_regex-config-version.cmake          |  12 +
+ .../boost_regex-config.cmake                  | 115 +++++++
+ .../libboost_regex-variant-static.cmake       |  86 +++++
+ .../boost_system-config-version.cmake         |  12 +
+ .../boost_system-config.cmake                 | 115 +++++++
+ .../libboost_system-variant-static.cmake      |  86 +++++
+ .../boost_thread-config-version.cmake         |  12 +
+ .../boost_thread-config.cmake                 | 119 +++++++
+ .../libboost_thread-variant-static.cmake      |  86 +++++
+ src/boost/stage/lib/libboost_atomic.a         | Bin 0 -> 40576 bytes
+ src/boost/stage/lib/libboost_chrono.a         | Bin 0 -> 71504 bytes
+ src/boost/stage/lib/libboost_container.a      | Bin 0 -> 115768 bytes
+ src/boost/stage/lib/libboost_coroutine.a      | Bin 0 -> 12272 bytes
+ src/boost/stage/lib/libboost_date_time.a      | Bin 0 -> 808 bytes
+ src/boost/stage/lib/libboost_iostreams.a      | Bin 0 -> 138032 bytes
+ src/boost/stage/lib/libboost_locale.a         | Bin 0 -> 1064960 bytes
+ .../stage/lib/libboost_program_options.a      | Bin 0 -> 680512 bytes
+ src/boost/stage/lib/libboost_random.a         | Bin 0 -> 25224 bytes
+ src/boost/stage/lib/libboost_regex.a          | Bin 0 -> 462888 bytes
+ src/boost/stage/lib/libboost_system.a         | Bin 0 -> 784 bytes
+ src/boost/stage/lib/libboost_thread.a         | Bin 0 -> 126744 bytes
+ 103 files changed, 3321 insertions(+), 2 deletions(-)
+ create mode 100755 src/boost/b2
+ create mode 100644 src/boost/bin.v2/libs/config/checks/architecture/clang-darwin-21/debug/threading-multi/visibility-hidden/64.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/architecture/clang-darwin-21/debug/threading-multi/visibility-hidden/arm.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_auto_declarations.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_decltype.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_defaulted_functions.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_defaulted_moves.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_hdr_functional.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_hdr_type_traits.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_noexcept.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_nullptr.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_override.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_range_based_for.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_rvalue_references.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_scoped_enums.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_smart_ptr.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/cxx11_static_assert.o
+ create mode 100644 src/boost/bin.v2/project-cache.jam
+ create mode 100644 src/boost/bin.v2/standalone/ac/bzlib_h.cpp
+ create mode 100755 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/bz2
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/bzlib_h.o
+ create mode 100755 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/lzma
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/main-bz2.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/main-libzstd.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/main-libzstd_static.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/main-lzma.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/main-z.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/main-zstd.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/main-zstd_static.o
+ create mode 100755 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/z
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/link-static/threading-multi/visibility-hidden/zlib_h.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/main-libzstd.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/main-libzstd_static.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/main-zstd.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/main-zstd_static.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/lzma_h.cpp
+ create mode 100644 src/boost/bin.v2/standalone/ac/main-bz2.cpp
+ create mode 100644 src/boost/bin.v2/standalone/ac/main-libzstd.cpp
+ create mode 100644 src/boost/bin.v2/standalone/ac/main-libzstd_static.cpp
+ create mode 100644 src/boost/bin.v2/standalone/ac/main-lzma.cpp
+ create mode 100644 src/boost/bin.v2/standalone/ac/main-z.cpp
+ create mode 100644 src/boost/bin.v2/standalone/ac/main-zstd.cpp
+ create mode 100644 src/boost/bin.v2/standalone/ac/main-zstd_static.cpp
+ create mode 100644 src/boost/bin.v2/standalone/ac/zlib_h.cpp
+ create mode 100644 src/boost/bin.v2/standalone/ac/zstd_h.cpp
+ create mode 100644 src/boost/bin.v2/tools/boost_install/BoostConfigVersion.cmake
+ create mode 100644 src/boost/project-config.jam
+ create mode 100644 src/boost/stage/lib/cmake/Boost-1.82.0/BoostConfig.cmake
+ create mode 100644 src/boost/stage/lib/cmake/Boost-1.82.0/BoostConfigVersion.cmake
+ create mode 100644 src/boost/stage/lib/cmake/BoostDetectToolset-1.82.0.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_atomic-1.82.0/boost_atomic-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_atomic-1.82.0/boost_atomic-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_atomic-1.82.0/libboost_atomic-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_chrono-1.82.0/boost_chrono-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_chrono-1.82.0/boost_chrono-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_chrono-1.82.0/libboost_chrono-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_container-1.82.0/boost_container-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_container-1.82.0/boost_container-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_container-1.82.0/libboost_container-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_context-1.82.0/boost_context-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_context-1.82.0/boost_context-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_coroutine-1.82.0/boost_coroutine-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_coroutine-1.82.0/boost_coroutine-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_coroutine-1.82.0/libboost_coroutine-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_date_time-1.82.0/boost_date_time-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_date_time-1.82.0/boost_date_time-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_date_time-1.82.0/libboost_date_time-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_headers-1.82.0/boost_headers-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_headers-1.82.0/boost_headers-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_iostreams-1.82.0/boost_iostreams-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_iostreams-1.82.0/boost_iostreams-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_iostreams-1.82.0/libboost_iostreams-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_locale-1.82.0/boost_locale-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_locale-1.82.0/boost_locale-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_locale-1.82.0/libboost_locale-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_program_options-1.82.0/boost_program_options-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_program_options-1.82.0/boost_program_options-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_program_options-1.82.0/libboost_program_options-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_random-1.82.0/boost_random-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_random-1.82.0/boost_random-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_random-1.82.0/libboost_random-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_regex-1.82.0/boost_regex-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_regex-1.82.0/boost_regex-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_regex-1.82.0/libboost_regex-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_system-1.82.0/boost_system-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_system-1.82.0/boost_system-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_system-1.82.0/libboost_system-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_thread-1.82.0/boost_thread-config-version.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_thread-1.82.0/boost_thread-config.cmake
+ create mode 100644 src/boost/stage/lib/cmake/boost_thread-1.82.0/libboost_thread-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/libboost_atomic.a
+ create mode 100644 src/boost/stage/lib/libboost_chrono.a
+ create mode 100644 src/boost/stage/lib/libboost_container.a
+ create mode 100644 src/boost/stage/lib/libboost_coroutine.a
+ create mode 100644 src/boost/stage/lib/libboost_date_time.a
+ create mode 100644 src/boost/stage/lib/libboost_iostreams.a
+ create mode 100644 src/boost/stage/lib/libboost_locale.a
+ create mode 100644 src/boost/stage/lib/libboost_program_options.a
+ create mode 100644 src/boost/stage/lib/libboost_random.a
+ create mode 100644 src/boost/stage/lib/libboost_regex.a
+ create mode 100644 src/boost/stage/lib/libboost_system.a
+ create mode 100644 src/boost/stage/lib/libboost_thread.a
+
+diff --git a/cmake/modules/BuildBoost.cmake b/cmake/modules/BuildBoost.cmake
+index 732756b93..cccedbd7b 100644
+--- a/cmake/modules/BuildBoost.cmake
++++ b/cmake/modules/BuildBoost.cmake
+@@ -134,10 +134,17 @@ function(do_build_boost root_dir version)
+   if(with_python_version)
+     list(APPEND b2 python=${with_python_version})
+   endif()
+-  if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm|ARM")
++  if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm|ARM|aarch64")
+     list(APPEND b2 abi=aapcs)
+     list(APPEND b2 architecture=arm)
+-    list(APPEND b2 binary-format=elf)
++    if(APPLE)
++      # Apple Silicon is aarch64 too, but the object format is Mach-O, not ELF.
++      # boost::context ships the matching *_arm64_aapcs_macho_gas.S sources.
++      list(APPEND b2 binary-format=mach-o)
++      list(APPEND b2 target-os=darwin)
++    else()
++      list(APPEND b2 binary-format=elf)
++    endif()
+   endif()
+   if(WITH_BOOST_VALGRIND)
+     list(APPEND b2 valgrind=on)

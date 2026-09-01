@@ -1,0 +1,139 @@
+From aece6faed929fda40d4316bcc089075cf82cd608 Mon Sep 17 00:00:00 2001
+From: max <max@local>
+Date: Mon, 31 Aug 2026 14:34:28 +0200
+Subject: [PATCH 3/7] build: fix macOS-specific link and header issues for
+ ceph-fuse
+
+- std::max needs an explicit type: uint64_t and size_t are distinct types on
+  Darwin (unsigned long long vs unsigned long), unlike LP64 Linux
+- do not pass -lcap when libcap was not found; it is Linux-only
+- keep macFUSE's FUSE 3 headers ahead of the FUSE 2 compatibility header
+---
+ cmake/modules/FindFUSE.cmake                  |   9 ++
+ .../cxx11_auto_declarations.o                 | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_decltype.o        | Bin 0 -> 512 bytes
+ .../cxx11_defaulted_functions.o               | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_defaulted_moves.o | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_hdr_functional.o  | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_hdr_type_traits.o | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_noexcept.o        | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_nullptr.o         | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_override.o        | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_range_based_for.o | Bin 0 -> 512 bytes
+ .../cxx11_rvalue_references.o                 | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_scoped_enums.o    | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_smart_ptr.o       | Bin 0 -> 512 bytes
+ .../visibility-hidden/cxx11_static_assert.o   | Bin 0 -> 512 bytes
+ src/boost/bin.v2/project-cache.jam            |  64 +++++++++----
+ .../threading-multi/visibility-hidden/bz2     | Bin 0 -> 16816 bytes
+ .../visibility-hidden/bzlib_h.o               | Bin 0 -> 336 bytes
+ .../threading-multi/visibility-hidden/lzma    | Bin 0 -> 16824 bytes
+ .../visibility-hidden/main-bz2.o              | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-lzma.o             | Bin 0 -> 512 bytes
+ .../visibility-hidden/main-z.o                | Bin 0 -> 512 bytes
+ .../threading-multi/visibility-hidden/z       | Bin 0 -> 16816 bytes
+ .../visibility-hidden/zlib_h.o                | Bin 0 -> 336 bytes
+ src/boost/project-config.jam.1                |  34 +++++++
+ .../libboost_context-variant-static.cmake     |  86 ++++++++++++++++++
+ src/boost/stage/lib/libboost_atomic.a         | Bin 40576 -> 40576 bytes
+ src/boost/stage/lib/libboost_chrono.a         | Bin 71504 -> 71504 bytes
+ src/boost/stage/lib/libboost_container.a      | Bin 115768 -> 115768 bytes
+ src/boost/stage/lib/libboost_context.a        | Bin 0 -> 5656 bytes
+ src/boost/stage/lib/libboost_coroutine.a      | Bin 12272 -> 12272 bytes
+ src/boost/stage/lib/libboost_date_time.a      | Bin 808 -> 808 bytes
+ src/boost/stage/lib/libboost_iostreams.a      | Bin 138032 -> 138032 bytes
+ src/boost/stage/lib/libboost_locale.a         | Bin 1064960 -> 1064960 bytes
+ .../stage/lib/libboost_program_options.a      | Bin 680512 -> 680512 bytes
+ src/boost/stage/lib/libboost_random.a         | Bin 25224 -> 25224 bytes
+ src/boost/stage/lib/libboost_regex.a          | Bin 462888 -> 462888 bytes
+ src/boost/stage/lib/libboost_system.a         | Bin 784 -> 784 bytes
+ src/boost/stage/lib/libboost_thread.a         | Bin 126744 -> 126744 bytes
+ src/extblkdev/CMakeLists.txt                  |   6 +-
+ src/osd/OSDMap.cc                             |   4 +-
+ 41 files changed, 180 insertions(+), 23 deletions(-)
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_auto_declarations.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_decltype.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_defaulted_functions.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_defaulted_moves.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_hdr_functional.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_hdr_type_traits.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_noexcept.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_nullptr.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_override.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_range_based_for.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_rvalue_references.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_scoped_enums.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_smart_ptr.o
+ create mode 100644 src/boost/bin.v2/libs/config/checks/clang-darwin-21/release/threading-multi/visibility-hidden/cxx11_static_assert.o
+ create mode 100755 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/bz2
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/bzlib_h.o
+ create mode 100755 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/lzma
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/main-bz2.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/main-lzma.o
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/main-z.o
+ create mode 100755 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/z
+ create mode 100644 src/boost/bin.v2/standalone/ac/clang-darwin-21/release/threading-multi/visibility-hidden/zlib_h.o
+ create mode 100644 src/boost/project-config.jam.1
+ create mode 100644 src/boost/stage/lib/cmake/boost_context-1.82.0/libboost_context-variant-static.cmake
+ create mode 100644 src/boost/stage/lib/libboost_context.a
+
+diff --git a/cmake/modules/FindFUSE.cmake b/cmake/modules/FindFUSE.cmake
+index b55a2d36f..0611c46ca 100644
+--- a/cmake/modules/FindFUSE.cmake
++++ b/cmake/modules/FindFUSE.cmake
+@@ -77,5 +77,14 @@ if(FUSE_FOUND)
+       IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+       IMPORTED_LOCATION "${FUSE_LIBRARIES}"
+       VERSION "${FUSE_VERSION}")
++    if(APPLE)
++      # macFUSE ships both generations under /usr/local: the FUSE 2 headers in
++      # /usr/local/include{,/fuse} and the FUSE 3 headers in
++      # /usr/local/include/fuse3. Passed with -isystem, the FUSE 3 directory
++      # loses against clang's built-in /usr/local/include, so <fuse.h> resolves
++      # to the FUSE 2 compatibility header and the two generations collide.
++      # Plain -I puts it back in front.
++      set_target_properties(FUSE::FUSE PROPERTIES IMPORTED_NO_SYSTEM TRUE)
++    endif()
+   endif()
+ endif()
+diff --git a/src/extblkdev/CMakeLists.txt b/src/extblkdev/CMakeLists.txt
+index 27e7c23e4..e0d59d462 100644
+--- a/src/extblkdev/CMakeLists.txt
++++ b/src/extblkdev/CMakeLists.txt
+@@ -8,7 +8,11 @@ add_library(extblkdev STATIC ExtBlkDevPlugin.cc)
+ 
+ if(NOT WIN32)
+ find_package(cap)
+-target_link_libraries(extblkdev cap)
++# libcap is Linux-only; without this guard the bare name "cap" reaches the
++# linker as -lcap even when find_package failed.
++if(cap_FOUND)
++  target_link_libraries(extblkdev cap)
++endif()
+ endif()
+ 
+ add_custom_target(extblkdev_plugins DEPENDS
+diff --git a/src/osd/OSDMap.cc b/src/osd/OSDMap.cc
+index f59543f95..e97ab9bb4 100644
+--- a/src/osd/OSDMap.cc
++++ b/src/osd/OSDMap.cc
+@@ -6512,14 +6512,14 @@ int OSDMap::calc_rbs_fair(CephContext *cct, OSDMap& tmp_osd_map, int64_t pool_id
+     }
+     if (prim_pgs_by_osd.count(osd)) {
+       auto n_prims = prim_pgs_by_osd.at(osd).size();
+-      max_prims_per_osd = std::max(max_prims_per_osd, n_prims);
++      max_prims_per_osd = std::max<uint64_t>(max_prims_per_osd, n_prims);
+       if (osd_pa == 0.) {
+         prim_on_zero_pa = true;
+       }
+     }
+     if (acting_prims_by_osd.count(osd)) {
+       auto n_aprims = acting_prims_by_osd.at(osd).size();
+-      max_acting_prims_per_osd = std::max(max_acting_prims_per_osd, n_aprims);
++      max_acting_prims_per_osd = std::max<uint64_t>(max_acting_prims_per_osd, n_aprims);
+       if (osd_pa != 0.) {
+         max_osd_score = std::max(max_osd_score, float(n_aprims) / osd_pa);
+       }
+-- 
+2.50.1 (Apple Git-155)
+
