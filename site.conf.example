@@ -1,0 +1,42 @@
+# Site configuration -- everything specific to your cluster and machine.
+#
+# Copy to site.conf and adjust. site.conf is gitignored: keep your cluster's
+# details out of the repository. Every script sources this file if it exists
+# and falls back to the defaults below, so a fresh checkout works without it.
+#
+#   cp site.conf.example site.conf && $EDITOR site.conf
+
+# --- CephFS ------------------------------------------------------------------
+
+# cephx user (the keyring is expected at ~/.ceph/ceph.client.$CEPH_USER.keyring)
+CEPH_USER=admin
+
+# Directory inside CephFS to mount, and where to mount it locally
+CEPH_REMOTE_PATH=/
+CEPH_MOUNT=$HOME/mnt/ceph/storage
+
+# --- SMB gateway (optional) ---------------------------------------------------
+# Only used by remount.sh and the benchmarks. Leave SMB_SERVER empty to skip
+# everything SMB-related.
+
+SMB_SERVER=
+SMB_SHARE=storage
+SMB_MOUNT=$HOME/mnt/smb/storage
+
+# --- Benchmarks (optional) ----------------------------------------------------
+# The benchmark scripts need real data on the share. Point these at a directory
+# with many entries and at one large file (>= 4 GiB, so different offsets can be
+# read cold). Paths are relative to the mount point.
+
+BENCH_TREE=corpora
+BENCH_BIGFILE=corpora/some-large-archive.zip
+
+# Where the benchmarks may create and delete their own scratch directory.
+# Both access paths share one parent on purpose: under a directory carrying a
+# distributed pin, separate children would be hashed onto different MDS ranks
+# and the comparison would silently measure different servers.
+BENCH_SCRATCH=scratch/.bench-shared
+
+# Where measurement runs are stored and read from (default: logs/runs).
+# Useful if you keep your results outside the public repository.
+#RUNS_DIR=$ROOT/internal/logs/runs

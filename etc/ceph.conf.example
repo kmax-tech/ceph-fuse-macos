@@ -1,0 +1,38 @@
+# Client configuration for ceph-fuse on macOS.
+# Copy to etc/ceph.conf and fill in your cluster's values. The real file is
+# gitignored. The secret key does NOT belong here -- it lives in
+# ~/.ceph/ceph.client.<user>.keyring with mode 0600.
+
+[global]
+    mon host = [mon.example.org]
+    fsid = 00000000-0000-0000-0000-000000000000
+    auth_client_required = cephx
+
+[client]
+    # macFUSE does not pass supplementary group IDs through; without this the
+    # client computes permissions from an incomplete group set. Our patch
+    # resolves them from the local user database instead, which needs this on.
+    fuse_set_user_groups = true
+
+    # Ceph defaults to /var/run/ceph for the admin socket and /var/log/ceph for
+    # logs. Neither exists on macOS, and creating them needs root -- ceph-fuse
+    # aborts on the resulting filesystem_error instead of degrading gracefully.
+    # Point this at a writable directory (absolute path).
+    run_dir = /tmp/ceph-fuse
+    admin_socket = $run_dir/$cluster-$name.$pid.asok
+    log_file = $run_dir/$cluster-$name.log
+    pid_file =
+
+    # Readahead tuning was tried and dropped: the defaults already keep enough
+    # object requests in flight. Raising client_readahead_max_periods to 16
+    # changed nothing, 64 made things worse. The limit is how fast a single
+    # object request is served, not how many the client issues.
+
+    # Write access needs an identity the cluster knows: CephFS checks uid/gid
+    # like a local filesystem, and a Mac's local uids usually have nothing to do
+    # with the cluster's. Uncomment and set to the identity you may write as --
+    # for instance the one an SMB gateway writes under (create a file over SMB
+    # and read its owner back through this mount with `ls -n`).
+    # Leave commented out to act as your local uid, which is the honest default.
+    # client_mount_uid = 0
+    # client_mount_gid = 0
