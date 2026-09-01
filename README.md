@@ -220,6 +220,16 @@ Vier parallele Leser erreichen das Mehrfache.
 | `BUILDING-macos.md` | Problemkatalog: jeder Fehler mit Meldung, Ursache, Fix |
 | `site.conf.example`, `etc/ceph.conf.example` | Konfigurationsvorlagen |
 
+## Lizenz
+
+Zweigeteilt, weil ein Teil geerbt ist:
+
+- **`patches/`** — LGPL-2.1 oder LGPL-3, Cephs Lizenz. Die Patches ändern
+  Ceph-Quelldateien und sind damit abgeleitete Werke; die Lizenz ist nicht
+  gewählt, sondern vererbt (siehe `patches/LICENSE`).
+- **alles Übrige** (Skripte, Analysewerkzeuge, Dokumentation) — MIT, siehe
+  `LICENSE`.
+
 ## Grenzen
 
 - **Kein Upstream-Support.** Ceph testet macOS in keiner CI; jedes Update kann

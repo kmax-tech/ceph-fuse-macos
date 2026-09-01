@@ -1,0 +1,14 @@
+The patches in this directory modify Ceph source files and are therefore
+derivative works of Ceph. They carry Ceph's licence, not the MIT licence of
+the surrounding repository:
+
+    LGPL-2.1 or LGPL-3, at your option
+
+as stated in Ceph's COPYING ("Files: *"). The three source files these patches
+touch -- src/client/fuse_ll.cc, src/include/ceph_fuse.h and src/osd/OSDMap.cc
+-- each carry an LGPL-2.1 header naming their respective copyright holders
+(Sage Weil, Inktank Storage, Red Hat, Cloudwatt and others); the two cmake
+modules fall under Ceph's blanket "Files: *" entry.
+
+Full texts: https://github.com/ceph/ceph/blob/main/COPYING-LGPL2.1
+            https://github.com/ceph/ceph/blob/main/COPYING-LGPL3
